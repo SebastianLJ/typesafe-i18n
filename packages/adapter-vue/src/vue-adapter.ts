@@ -1,11 +1,10 @@
-import React from 'react'
+import Vue from 'vue'
 import type { BaseFormatters, BaseTranslation, TranslationFunctions } from '../../core/src/core'
-import { getFallbackProxy } from '../../core/src/core-utils'
 import {
 	AsyncFormattersInitializer,
 	FormattersInitializer,
 	TranslationLoader,
-	TranslationLoaderAsync
+	TranslationLoaderAsync,
 } from '../../core/src/util.loader'
 import { i18nObject } from '../../core/src/util.object'
 
@@ -13,7 +12,7 @@ import { i18nObject } from '../../core/src/util.object'
 // types --------------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 
-export type I18nContextType<
+export type I18nProvideType<
 	L extends string = string,
 	T extends BaseTranslation = BaseTranslation,
 	TF extends TranslationFunctions = TranslationFunctions<T>,
@@ -28,20 +27,19 @@ export type TypesafeI18nProps<L extends string> = {
 	initialLocale?: L
 }
 
-export type ReactInit<
+export type VueInit<
 	L extends string = string,
 	T extends BaseTranslation = BaseTranslation,
 	TF extends TranslationFunctions = TranslationFunctions<T>,
 > = {
-	component: React.FunctionComponent<TypesafeI18nProps<L>>
-	context: React.Context<I18nContextType<L, T, TF>>
+	component: Vue.Component<TypesafeI18nProps<L>>
 }
 
 // --------------------------------------------------------------------------------------------------------------------
 // implementation -----------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------------------
 
-export const initI18nReact = <
+export const initI18nVue = <
 	L extends string = string,
 	T extends BaseTranslation = BaseTranslation,
 	TF extends TranslationFunctions<T> = TranslationFunctions<T>,
@@ -50,48 +48,50 @@ export const initI18nReact = <
 	baseLocale: L = '' as L,
 	getTranslationForLocale: TranslationLoader<L, T> | TranslationLoaderAsync<L, T> = () => ({} as T),
 	initFormatters: FormattersInitializer<L, F> | AsyncFormattersInitializer<L, F> = () => ({} as F),
-): ReactInit<L, T, TF> => {
-	const context = getI18nContext<L, T, TF>()
+) => {
+	let isLoading: boolean
+	let currentLocale: L
+	let LL: TF
 
-	const component: React.FunctionComponent<TypesafeI18nProps<L>> = (props) => {
-		const [isLoadingLocale, setIsLoadingLocale] = React.useState<boolean>(false)
-		const [currentLocale, setCurrentLocale] = React.useState<L>(null as unknown as L)
-		const [LL, setLL] = React.useState<TF>(getFallbackProxy<TF>())
+	const component = Vue.component('TypesafeI18n', {
+		props: {
+			initialLocale: Object as Vue.PropType<L>,
+		},
+		data() {
+			return {
+				baseLocale,
+				isLoading,
+				currentLocale,
+				LL,
+			}
+		},
+		methods: {
+			setLocale: async function (newLocale: L) {
+				if (!newLocale || !getTranslationForLocale) return
 
-		const setLocale = async (newLocale: L): Promise<void> => {
-			setIsLoadingLocale(true)
+				this.isLoading = true
 
-			const translation = getTranslationForLocale(newLocale)
-			const formatters = initFormatters(newLocale)
-
-			setLL(
-				i18nObject<L, T, TF, F>(
+				const translation = getTranslationForLocale(newLocale)
+				const formatters = initFormatters(newLocale)
+				this.LL = i18nObject(
 					newLocale,
 					translation instanceof Promise ? await translation : translation,
 					formatters instanceof Promise ? await formatters : formatters,
-				),
-			)
+				)
 
-			setCurrentLocale(newLocale)
-			setIsLoadingLocale(false)
-		}
-
-		!currentLocale && !isLoadingLocale && setLocale(props.initialLocale || baseLocale)
-
-		if (!isLoadingLocale && !LL) {
-			return null
-		}
-
-		const ctx = { setLocale, isLoadingLocale, locale: currentLocale, LL } as I18nContextType<L, T, TF>
-
-		return <context.Provider value={ctx}>{props.children}</context.Provider>
-	}
-
-	return { component, context }
+				this.currentLocale = newLocale
+				this.isLoading = false
+			},
+		},
+		mounted() {
+			!this.currentLocale && !this.isLoading && this.setLocale(this.initialLocale || this.baseLocale)
+		},
+		provide() {
+			this.setLocale
+			this.isLoading
+			this.currentLocale
+			this.LL
+		},
+	})
+	return { component }
 }
-
-const getI18nContext = <
-	L extends string = string,
-	T extends BaseTranslation = BaseTranslation,
-	TF extends TranslationFunctions = TranslationFunctions<T>,
->() => React.createContext({} as I18nContextType<L, T, TF>)
