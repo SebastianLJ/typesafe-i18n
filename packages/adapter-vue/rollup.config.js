@@ -10,16 +10,16 @@ import { terser } from 'rollup-plugin-terser'
 const getPath = (file) => path.resolve(__dirname, file)
 
 const createConfig = (format, minify) => ({
-	input: getPath('src/svelte-store.ts'),
+	input: getPath('src/vue-adapter.ts'),
 	output: [
 		{
-			file: getPath(`../../svelte/svelte-store${minify ? '.min' : ''}.${format === 'esm' ? 'm' : 'c'}js`),
+			file: getPath(`../../vue/vue-adapter${minify ? '.min' : ''}.${format === 'esm' ? 'm' : 'c'}js`),
 			format,
 			sourcemap: !minify,
 			exports: 'named',
 		},
 	],
-	external: ['svelte/store'],
+	external: ['vue/adapter'],
 	plugins: [
 		commonjs(),
 		resolve({ preferBuiltins: true }),
